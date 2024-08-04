@@ -11,13 +11,13 @@ from .exceptions import (
     PackagesNotFoundInRepoError,
 )
 from .i18n import translate
-from .logging import create_logger
+from .logging_extras import create_logger
 from .pacman import PackageDB
-from .pprint import print_error
+from .pikaprint import print_error
 from .version import VersionMatcher
 
 if TYPE_CHECKING:
-    from .aur import AURPackageInfo
+    from .aur_types import AURPackageInfo
 
 
 logger = create_logger("aur_deps")
@@ -254,6 +254,7 @@ def find_missing_deps_for_aur_pkg(
     )
     provided_aur_deps_info, not_found_aur_deps = find_aur_provided_deps(
         not_found_aur_deps,
+        version_matchers=version_matchers,
     )
     aur_deps_info += provided_aur_deps_info
 

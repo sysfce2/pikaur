@@ -3,9 +3,9 @@ from .config import BuildCachePath, PackageCachePath, PikaurConfig
 from .core import interactive_spawn, remove_dir
 from .exceptions import SysExit
 from .i18n import translate
-from .logging import create_logger
+from .logging_extras import create_logger
+from .pikaprint import ColorsHighlight, bold_line, color_line, print_stdout
 from .pikspect import YesNo, format_pacman_question, pikspect
-from .pprint import ColorsHighlight, bold_line, color_line, print_stdout
 from .privilege import sudo
 from .prompt import ask_to_continue
 
@@ -15,8 +15,8 @@ _debug = create_logger("pkg_cache_cli").debug
 def clean_aur_cache() -> None:
     args = parse_args()
     for directory, message, minimal_clean_level in (
-            (BuildCachePath()(), translate("Build directory"), 1),
-            (PackageCachePath()(), translate("Packages directory"), 2),
+            (BuildCachePath(), translate("Build directory"), 1),
+            (PackageCachePath(), translate("Packages directory"), 2),
     ):
         print_stdout(f"\n{message}: {directory}")
         question = translate("Do you want to remove all files?")

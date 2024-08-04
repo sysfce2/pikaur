@@ -1,6 +1,6 @@
 [project]
 name = "pikaur"
-version = '1.22.4'
+version = '1.23'
 description = 'AUR helper with minimal dependencies'
 authors = [
   {name = 'Yauheni Kirylau', email = 'actionless.loveless@gmail.com'},
@@ -42,7 +42,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.bandit]
-exclude_dirs = ["./dumpster/", "./maintenance_scripts/"]
+exclude_dirs = ["./dumpster/", "./maintenance_scripts/", "./pikaur_meta_helpers/"]
 
 [tool.mypy]
 check_untyped_defs = true
@@ -83,6 +83,7 @@ select = [
   "I",
   "N",
   "D",
+  #"DOC", pydoclint
   "UP",
   "YTT",
   "ANN",
@@ -98,6 +99,7 @@ select = [
   "DTZ",
   "T10",
   #"DJ",  # django
+  #"FAST",  # fastapi
   "EM",
   "EXE",
   "FA",
@@ -172,7 +174,7 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"pikaur/argparse.py" = [
+"pikaur/argparse_extras.py" = [
   "PLR0912",
   "PLR0915",
   "SLF001",
@@ -190,6 +192,14 @@ ignore = [
   "T201",
 ]
 "maintenance_scripts/*.py" = [
+  "INP001",
+  "S301",
+  "S403",
+  "S404",
+  "T201",
+  "T203",
+]
+"pikaur_meta_helpers/*.py" = [
   "INP001",
   "S301",
   "S403",

@@ -3,6 +3,7 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from .alpm import PacmanConfig
 from .args import parse_args
 from .aur import find_aur_packages
 from .config import PikaurConfig
@@ -11,12 +12,11 @@ from .exceptions import PackagesNotFoundInRepoError
 from .i18n import translate, translate_many
 from .pacman import (
     PackageDB,
-    PacmanConfig,
     find_packages_not_from_repo,
     find_upgradeable_packages,
     get_ignored_pkgnames_from_patterns,
 )
-from .pprint import print_stderr, print_stdout
+from .pikaprint import print_stderr, print_stdout
 from .print_department import (
     pretty_format_upgradeable,
     print_ignored_package,
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
     import pyalpm
 
-    from .aur import AURPackageInfo
+    from .aur_types import AURPackageInfo
     from .core import InstallInfo
 
 

@@ -6,19 +6,20 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, ClassVar
 
 import pyalpm
-from pycman.config import PacmanConfig as PycmanConfig
 
+from .alpm import PyAlpmWrapper
 from .args import PACMAN_APPEND_OPTS, get_pacman_str_opts, parse_args, reconstruct_args
 from .config import PikaurConfig
 from .core import DataType, PackageSource, spawn
 from .exceptions import DependencyError, PackagesNotFoundInRepoError
 from .i18n import translate
 from .lock import FancyLock
-from .logging import create_logger
+from .logging_extras import create_logger
 from .pacman_i18n import _p
-from .pprint import color_enabled, print_error, print_stderr
+from .pikaprint import color_enabled, print_stderr
 from .privilege import sudo
 from .prompt import retry_interactive_command, retry_interactive_command_or_exit
+from .provider import Provider
 from .version import VersionMatcher
 
 if TYPE_CHECKING:
@@ -27,19 +28,7 @@ if TYPE_CHECKING:
     from re import Pattern
     from typing import Final
 
-    from .aur import AURPackageInfo
-
-
-OFFICIAL_REPOS: "Final" = (
-    "core",
-    "extra",
-    "multilib",
-    "core-testing",
-    "extra-testing",
-    "multilib-testing",
-    "core-staging",
-    "extra-staging",
-)
+    from .aur_types import AURPackageInfo
 
 
 REPO_NAME_DELIMITER: "Final" = "/"
@@ -120,12 +109,6 @@ class PacmanPrint(DataType):
     full_name: str
     repo: str
     name: str
-
-
-class PacmanConfig(PycmanConfig):
-
-    def __init__(self) -> None:
-        super().__init__(conf=parse_args().config or "/etc/pacman.conf")
 
 
 class ProvidedDependency(DataType):
@@ -283,22 +266,11 @@ class RepositoryNotFoundError(Exception):
     pass
 
 
-class PackageDB(PackageDBCommon):
-
-    _alpm_handle: pyalpm.Handle | None = None
+class PackageDB(PackageDBCommon, PyAlpmWrapper):
 
     _pacman_pformat_cache: ClassVar[dict[str, RawPrintFormat]] = {}
     _pacman_test_cache: ClassVar[dict[str, list[VersionMatcher]]] = {}
     _pacman_repo_pkg_present_cache: ClassVar[dict[str, bool]] = {}
-
-    @classmethod
-    def get_alpm_handle(cls) -> pyalpm.Handle:
-        if not cls._alpm_handle:
-            cls._alpm_handle = PacmanConfig().initialize_alpm()
-        if not cls._alpm_handle:
-            cant_init_alpm = translate("Cannot initialize ALPM")
-            raise RuntimeError(cant_init_alpm)
-        return cls._alpm_handle
 
     @classmethod
     def discard_local_cache(cls) -> None:
@@ -545,7 +517,7 @@ class PackageDB(PackageDBCommon):
 
     @classmethod
     def find_repo_package(cls, pkg_name: str) -> pyalpm.Package:
-        # @TODO: interactively ask for multiple providers and save the answer?
+
         if cls._pacman_repo_pkg_present_cache.get(pkg_name) is False:
             raise PackagesNotFoundInRepoError(packages=[pkg_name])
         all_repo_pkgs = PackageDB.get_repo_dict()
@@ -561,16 +533,22 @@ class PackageDB(PackageDBCommon):
             return found_pkgs[0]
 
         pkg_name = VersionMatcher(pkg_name).pkg_name
-        for pkg in found_pkgs:
-            if pkg.name == pkg_name:
-                return pkg
+        matching_pkgs: list[pyalpm.Package] = [
+            pkg
+            for pkg in found_pkgs
+            if pkg.name == pkg_name
+        ]
         for pkg in found_pkgs:
             if pkg.provides:
                 for provided_pkg_line in pkg.provides:
                     provided_name = VersionMatcher(provided_pkg_line).pkg_name
                     if provided_name == pkg_name:
-                        return pkg
-        raise PackagesNotFoundInRepoError(packages=[pkg_name])
+                        matching_pkgs.append(pkg)
+        if not matching_pkgs:
+            raise PackagesNotFoundInRepoError(packages=[pkg_name])
+        return matching_pkgs[Provider.choose(
+            dependency=pkg_name, options=matching_pkgs,
+        )]
 
     @classmethod
     def get_local_pkg_uncached(cls, name: str) -> pyalpm.Package:
@@ -598,15 +576,15 @@ def find_upgradeable_packages() -> list[pyalpm.Package]:
     try:
         results = PackageDB.get_sync_print_format_output(pkg_names=pkg_names)
     except DependencyError as exc:
-        print_error(translate("Dependencies can't be satisfied for the following packages:"))
-        print_stderr(" " * 12 + " ".join(pkg_names))
-        print_stderr(str(exc))
+        logger.debug(translate("Dependencies can't be satisfied for the following packages:"))
+        logger.debug("{}{}", " " * 12, " ".join(pkg_names))
+        logger.debug(str(exc))
         for pkg_name in pkg_names:
             try:
                 results += PackageDB.get_sync_print_format_output([pkg_name])
             except DependencyError as exc2:
-                print_error(translate("Because of:"))
-                print_stderr(str(exc2))
+                logger.debug(translate("Because of:"))
+                logger.debug(str(exc2))
     return [
         all_repo_pkgs[result.full_name] for result in results
         if result.name in all_local_pkgs

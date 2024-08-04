@@ -12,9 +12,9 @@ except ModuleNotFoundError:
 from .config import CacheRoot, PikaurConfig
 from .core import DEFAULT_TIMEZONE, open_file
 from .i18n import translate
-from .logging import create_logger
+from .logging_extras import create_logger
 from .pacman import PackageDB
-from .pprint import (
+from .pikaprint import (
     BOLD_RESET,
     BOLD_START,
     COLOR_RESET,
@@ -56,7 +56,7 @@ class News:
 
     def __init__(self) -> None:
         self.url = PikaurConfig().network.NewsUrl.get_str()
-        self.cache_file = CacheRoot()() / "last_seen_news.dat"
+        self.cache_file = CacheRoot() / "last_seen_news.dat"
         self._news_feed = None
         self._news_entry_to_update_last_seen_date = None
         logger.debug("init")
@@ -182,9 +182,10 @@ class News:
 
 
 class MLStripper(HTMLParser):
-    """HTMLParser that only removes HTML statements."""
+    """HTMLParser optimized for terminal output."""
 
     last_href: str | None = None
+    last_data: str | None = None
 
     def error(self, message: object) -> None:
         pass
@@ -230,9 +231,13 @@ class MLStripper(HTMLParser):
         elif tag in {"strong", "em"}:
             self.fed.append(BOLD_RESET)
         if (tag == "a") and self.last_href:
-            self.fed.append(f": {color_line(self.last_href, ColorsHighlight.blue)} ")
+            if self.last_data != self.last_href:
+                self.fed.append(f": {color_line(self.last_href, ColorsHighlight.blue)} ")
+            else:
+                self.fed.append(" ")
 
     def handle_data(self, data: str) -> None:
+        self.last_data = data
         self.fed.append(data)
 
     def get_data(self) -> str:

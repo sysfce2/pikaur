@@ -8,7 +8,7 @@ from .core import DEFAULT_TIMEZONE, spawn
 from .i18n import translate
 from .pacman import get_pacman_command, refresh_pkg_db_if_needed
 from .pacman_i18n import _p
-from .pprint import ColorsHighlight, bold_line, color_line, print_stdout
+from .pikaprint import ColorsHighlight, bold_line, color_line, print_stdout
 
 
 def _info_packages_thread_repo() -> str | None:
@@ -22,6 +22,7 @@ def _info_packages_thread_repo() -> str | None:
 def get_info_fields() -> dict[str, str]:
     return {
         "git_url": translate("AUR Git URL"),
+        "web_url": translate("AUR Web URL"),
         # "aur_id": translate("id"),
         "name": translate("Name"),
         # packagebaseid=translate(""),

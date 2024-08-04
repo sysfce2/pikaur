@@ -10,7 +10,7 @@ ARG MODE=--local
 ARG TESTSUITE=all
 ARG SKIP_LINTING=0
 
-RUN echo 'Server = https://mirrors.xtom.nl/archlinux/$repo/os/$arch' >> /etc/pacman.d/mirrorlist ; \
+RUN echo 'Server = https://mirrors.xtom.nl/archlinux/$repo/os/$arch' > /etc/pacman.d/mirrorlist ; \
 	echo 'Server = https://archlinux.mirror.pcextreme.nl/$repo/os/$arch' >> /etc/pacman.d/mirrorlist ; \
 	echo 'Server = https://archlinux.mirror.wearetriple.com/$repo/os/$arch' >> /etc/pacman.d/mirrorlist ; \
 	echo 'Server = https://mirror.mijn.host/archlinux/$repo/os/$arch' >> /etc/pacman.d/mirrorlist ; \
@@ -46,17 +46,19 @@ RUN echo ">>>> Installing opt deps:" && \
 	./maintenance_scripts/changelog.sh > CHANGELOG && \
 	sudo -u user makepkg -fsi --noconfirm && \
 	rm -fr ./src/ ./pkg/
-#RUN sudo -u user python -u maintenance_scripts/pidowngrade.py python-coverage '7.4.1-1'  # up to 7.4.4
+
+COPY ./pikaur_meta_helpers /opt/app-build/pikaur_meta_helpers
+#RUN sudo -u user python -um pikaur_meta_helpers.pidowngrade python-coverage '7.4.1-1'  # up to 7.4.4
 RUN echo ">>>> Installing test deps using Pikaur itself:" && \
 	sudo -u user pikaur -S --noconfirm --needed --color=always iputils python-virtualenv python-tqdm \
 		flake8 python-pylint mypy vulture bandit shellcheck # @TODO: python-coveralls is temporary broken
-#RUN sudo -u user python -u maintenance_scripts/pidowngrade.py python-pycodestyle '2.9.1-2' # @TODO: remove it when it fixed
+#RUN sudo -u user python -um pikaur_meta_helpers.pidowngrade python-pycodestyle '2.9.1-2'
 
 COPY ./pikaur_test /opt/app-build/pikaur_test
 COPY ./maintenance_scripts /opt/app-build/maintenance_scripts/
 COPY .flake8 /opt/app-build/
 RUN echo ">>>> Starting CI linting:" && \
-	chown -R user /opt/app-build/pikaur_test && \
+	chown -R user /opt/app-build/pikaur_{test,meta_helpers} && \
 	if [[ "$SKIP_LINTING" -eq 0 ]] ; then \
 		sudo -u user env \
 		./maintenance_scripts/lint.sh ; \

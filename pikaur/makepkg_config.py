@@ -5,9 +5,8 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .args import parse_args
-from .config import ConfigRoot, _UserTempRoot
+from .config import ConfigRoot, UsingDynamicUsers, _UserTempRoot
 from .core import open_file
-from .privilege import using_dynamic_users
 
 if TYPE_CHECKING:
     from typing import Final, TypeVar
@@ -96,7 +95,7 @@ class MakepkgConfig:
         if cls._user_makepkg_path is cls._UNSET:
             possible_paths = [
                 Path("~/.makepkg.conf").expanduser(),
-                ConfigRoot()() / "pacman/makepkg.conf",
+                ConfigRoot() / "pacman/makepkg.conf",
             ]
             config_path: Path | None = None
             for path in possible_paths:
@@ -142,12 +141,12 @@ class MakePkgCommand:
 
     @classmethod
     def _apply_dynamic_users_workaround(cls) -> None:
-        if not using_dynamic_users():
+        if not UsingDynamicUsers():
             return
         pkgdest = str(get_pkgdest())
         if pkgdest and (
                 pkgdest.startswith(
-                    (str(_UserTempRoot()()), "/tmp", "/var/tmp"),  # nosec B108  # noqa: S108
+                    (str(_UserTempRoot()), "/tmp", "/var/tmp"),  # nosec B108  # noqa: S108
                 )
         ):
             if not cls._cmd:

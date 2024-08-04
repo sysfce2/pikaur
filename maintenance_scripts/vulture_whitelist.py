@@ -7,6 +7,7 @@ from vulture.whitelist_utils import Whitelist  # type: ignore[import-untyped]
 
 whitelist: Whitelist = Whitelist()  # type: ignore[no-any-unimported]
 
+whitelist.__new__
 whitelist.Any
 whitelist.BinaryIO
 whitelist.Final
@@ -37,6 +38,7 @@ whitelist.aur.AURPackageInfo.urlpath
 whitelist.aur.AURPackageInfo.pkg_license
 whitelist.aur.AURPackageInfo.keywords
 whitelist.aur.AURPackageInfo.git_url
+whitelist.aur.AURPackageInfo.web_url
 whitelist.aur.AURPackageInfo.submitter
 whitelist.aur.AURPackageInfo.comaintainers
 
@@ -49,6 +51,8 @@ whitelist.config.ConfigValueType.migrated
 
 whitelist.core.SpawnArgs
 whitelist.core.SudoLoopResultT
+
+whitelist.i18n.EXTRA_ERROR_MESSAGES
 
 whitelist.main.socket.socket
 whitelist.main.OutputEncodingWrapper.original_stdout

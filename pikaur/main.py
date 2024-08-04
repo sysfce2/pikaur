@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 import pyalpm
 
 from .args import parse_args
-from .aur import AURPackageInfo
+from .aur_types import AURPackageInfo
 from .config import (
     AurReposCachePath,
     CacheRoot,
@@ -41,19 +41,17 @@ from .help_cli import cli_print_help
 from .i18n import translate
 from .info_cli import cli_info_packages
 from .install_cli import InstallPackagesCLI
-from .logging import create_logger
+from .logging_extras import create_logger
 from .pacman import PackageDB
+from .pikaprint import TTYRestore, bold_line, print_error, print_stderr, print_warning
 from .pikspect import PikspectSignalHandler
 from .pkg_cache_cli import cli_clean_packages_cache
-from .pprint import TTYRestore, bold_line, print_error, print_stderr, print_warning
 from .print_department import print_version
 from .privilege import (
     get_args_to_elevate_pikaur,
     isolate_root_cmd,
     need_dynamic_users,
-    running_as_root,
     sudo,
-    using_dynamic_users,
 )
 from .prompt import NotANumberInputError, get_multiple_numbers_input
 from .search_cli import cli_search_packages, search_packages
@@ -200,7 +198,7 @@ def cli_dynamic_select() -> None:  # pragma: no cover
                     "and press [Enter] (default={}):",
                 ).format(1),
             )
-            answers = get_multiple_numbers_input("> ", list(range(1, len(packages) + 1))) or [1]
+            answers = get_multiple_numbers_input(answers=list(range(1, len(packages) + 1))) or [1]
             print_stderr()
             selected_pkgs_idx = [idx - 1 for idx in answers]
             restart_prompt = False
@@ -254,7 +252,7 @@ def execute_pikaur_operation(
         args.positional += add_args
         cli_args += add_args
     if (
-            running_as_root()
+            RunningAsRoot()
             and (PikaurConfig().build.DynamicUsers.get_str() == "never" and not args.user_id)
     ):
         print_error(
@@ -266,7 +264,7 @@ def execute_pikaur_operation(
         sys.exit(1)
     elif (
             require_sudo
-            and not running_as_root()
+            and not RunningAsRoot()
             and (
                 args.privilege_escalation_target == "pikaur"
                 or need_dynamic_users()
@@ -354,13 +352,13 @@ def cli_entry_point() -> None:
 
 
 def migrate_old_aur_repos_dir() -> None:
-    old_aur_repos_cache_path = _OldAurReposCachePath()()
-    new_aur_repos_cache_path = AurReposCachePath()()
+    old_aur_repos_cache_path = _OldAurReposCachePath()
+    new_aur_repos_cache_path = AurReposCachePath()
     if not (
             old_aur_repos_cache_path.exists() and not new_aur_repos_cache_path.exists()
     ):
         return
-    mkdir(DataRoot()())
+    mkdir(DataRoot())
     shutil.move(old_aur_repos_cache_path, new_aur_repos_cache_path)
 
     print_stderr()
@@ -376,7 +374,7 @@ def migrate_old_aur_repos_dir() -> None:
 
 
 def create_dirs() -> None:
-    if using_dynamic_users():
+    if UsingDynamicUsers():
         # Let systemd-run setup the directories and symlinks
         true_cmd = isolate_root_cmd(["true"])
         result = spawn(true_cmd)
@@ -384,11 +382,11 @@ def create_dirs() -> None:
             raise RuntimeError(result)
         # Chown the private CacheDirectory to root to signal systemd that
         # it needs to recursively chown it to the correct user
-        os.chown(os.path.realpath(CacheRoot()()), 0, 0)
-        mkdir(_UserCacheRoot()())
-    mkdir(CacheRoot()())
+        os.chown(os.path.realpath(CacheRoot()), 0, 0)
+        mkdir(_UserCacheRoot())
+    mkdir(CacheRoot())
     migrate_old_aur_repos_dir()
-    mkdir(AurReposCachePath()())
+    mkdir(AurReposCachePath())
 
 
 def restore_tty() -> None:
@@ -440,7 +438,7 @@ def check_runtime_deps() -> None:
         sys.exit(65)
     if (
         (PikaurConfig().build.DynamicUsers.get_str() != "never" and not parse_args().user_id)
-        and (UsingDynamicUsers()() and not check_systemd_dynamic_users_version())
+        and (UsingDynamicUsers() and not check_systemd_dynamic_users_version())
     ):
         print_error(
             translate("pikaur requires systemd >= 235 (dynamic users) to be run as root."),
@@ -480,13 +478,13 @@ def check_runtime_deps() -> None:
                 ] if privilege_escalation_tool == "sudo" else [
                     "",
                     translate(
-                        "{privilege_escalation_tool} is not part of minimal arch default setup,"
+                        "{privilege_escalation_tool} is not part of minimal Arch default setup,"
                         " be aware that you could run into potential problems.",
                     ).format(privilege_escalation_tool=privilege_escalation_tool),
                     "",
                 ]),
             )
-    if not RunningAsRoot()():
+    if not RunningAsRoot():
         check_executables([privilege_escalation_tool])
 
 

@@ -9,9 +9,9 @@ from tempfile import NamedTemporaryFile
 from typing import TYPE_CHECKING
 
 from .args import parse_args, reconstruct_args
-from .aur import AURPackageInfo
+from .aur_types import AURPackageInfo
 from .build import PackageBuild, PkgbuildChanged, clone_aur_repos
-from .config import DiffPagerValues, PikaurConfig
+from .config import DiffPagerValues, PikaurConfig, UsingDynamicUsers
 from .conflicts import find_aur_conflicts
 from .core import (
     PackageSource,
@@ -32,7 +32,7 @@ from .exceptions import (
 )
 from .i18n import translate
 from .install_info_fetcher import InstallInfoFetcher
-from .logging import create_logger
+from .logging_extras import create_logger
 from .news import News
 from .pacman import (
     PackageDB,
@@ -41,7 +41,7 @@ from .pacman import (
     refresh_pkg_db_if_needed,
     strip_repo_name,
 )
-from .pprint import (
+from .pikaprint import (
     ColorsHighlight,
     TTYRestoreContext,
     bold_line,
@@ -53,15 +53,11 @@ from .pprint import (
 )
 from .print_department import (
     pretty_format_sysupgrade,
-    print_local_package_newer,
     print_not_found_packages,
-    print_package_downgrading,
-    print_package_uptodate,
 )
 from .privilege import (
     isolate_root_cmd,
     sudo,
-    using_dynamic_users,
 )
 from .prompt import (
     ask_to_continue,
@@ -118,6 +114,42 @@ def _remove_packages(packages_to_be_removed: list[str]) -> None:
             pikspect=True,
         )
         PackageDB.discard_local_cache()
+
+
+def _get_local_version(package_name: str) -> str:
+    return PackageDB.get_local_dict()[package_name].version
+
+
+def print_package_uptodate(package_name: str, package_source: "PackageSource") -> None:
+    print_warning(
+        translate("{name} {version} {package_source} package is up to date - skipping").format(
+            name=package_name,
+            version=bold_line(_get_local_version(package_name)),
+            package_source=package_source.name,
+        ),
+    )
+
+
+def print_local_package_newer(package_name: str, aur_version: str) -> None:
+    print_warning(
+        translate(
+            "{name} {version} local package is newer than in AUR ({aur_version}) - skipping",
+        ).format(
+            name=package_name,
+            version=bold_line(_get_local_version(package_name)),
+            aur_version=bold_line(aur_version),
+        ),
+    )
+
+
+def print_package_downgrading(package_name: str, downgrade_version: str) -> None:
+    print_warning(
+        translate("Downgrading AUR package {name} {version} to {downgrade_version}").format(
+            name=bold_line(package_name),
+            version=bold_line(_get_local_version(package_name)),
+            downgrade_version=bold_line(downgrade_version),
+        ),
+    )
 
 
 class InstallPackagesCLI:  # noqa: PLR0904
@@ -258,7 +290,7 @@ class InstallPackagesCLI:  # noqa: PLR0904
         self.install_package_names = []
         self.not_found_repo_pkgs_names = []
         self.pkgbuilds_packagelists = {
-            path: [] for path in
+            Path(path).resolve().as_posix(): [] for path in
             self.args.positional or ["PKGBUILD"]
         }
 
@@ -511,17 +543,16 @@ class InstallPackagesCLI:  # noqa: PLR0904
                 f"\n{color_line('::', ColorsHighlight.blue)}"
                 f" {bold_line(options_line1)}"
             )
+            answers = translate("y").upper() + translate("n") + translate("v") + translate("m")
             if self.news and self.news.any_news:
                 options_news = translate("[c]onfirm Arch NEWS as read")
                 prompt += (
                     f"\n{color_line('::', ColorsHighlight.blue)}"
                     f" {bold_line(options_news)}"
                 )
+                answers += translate("c")
             prompt += "\n>> "
-            return get_input(
-                prompt,
-                translate("y").upper() + translate("n") + translate("v") + translate("m"),
-            )
+            return get_input(prompt, answers)
 
         if self.args.noconfirm:
             _print_sysupgrade()
@@ -713,6 +744,8 @@ class InstallPackagesCLI:  # noqa: PLR0904
                 return pkgbuild_by_name
 
     def get_package_builds(self) -> None:
+        logger.debug("<< GET_PACKAGE_BUILD")
+        logger.debug("self.pkgbuilds_packagelists={}", self.pkgbuilds_packagelists)
         while self.all_aur_packages_names:
             clone_infos = []
             pkgbuilds_by_base: dict[str, PackageBuild] = {}
@@ -726,8 +759,8 @@ class InstallPackagesCLI:  # noqa: PLR0904
                     if pkg_base not in pkgbuilds_by_base:
                         package_names = self.pkgbuilds_packagelists.get(info.pkgbuild_path)
                         logger.debug(
-                            "Initializing build info for {}({}): {}",
-                            pkg_base, package_names, info.pkgbuild_path,
+                            "Initializing build info for {} {}({}): {}",
+                            info, pkg_base, package_names, info.pkgbuild_path,
                         )
                         pkgbuilds_by_base[pkg_base] = PackageBuild(
                             pkgbuild_path=info.pkgbuild_path,
@@ -760,6 +793,7 @@ class InstallPackagesCLI:  # noqa: PLR0904
             break
         logger.debug("self.package_builds_by_name={}", self.package_builds_by_name)
         logger.debug("self.package_builds_by_provides={}", self.package_builds_by_provides)
+        logger.debug(">> GET_PACKAGE_BUILD")
 
     def ask_about_package_conflicts(self) -> None:
         if self.aur_packages_names or self.aur_deps_names:
@@ -830,7 +864,7 @@ class InstallPackagesCLI:  # noqa: PLR0904
         # if running as root get sources for dev packages synchronously
         # (to prevent race condition in systemd dynamic users)
         num_threads: int | None = None
-        if using_dynamic_users():  # pragma: no cover
+        if UsingDynamicUsers():  # pragma: no cover
             num_threads = 1
 
         # check if pkgs versions already installed
@@ -1006,7 +1040,8 @@ class InstallPackagesCLI:  # noqa: PLR0904
         src_info.regenerate()
         new_srcinfo_hash = hash_file(src_info.path)
 
-        self.pkgbuilds_packagelists[str(pkg_build.pkgbuild_path)] = pkg_build.package_names
+        pkgbuild_path_str = pkg_build.pkgbuild_path.as_posix()
+        self.pkgbuilds_packagelists[pkgbuild_path_str] = pkg_build.package_names
         self.reviewed_package_bases.append(pkg_build.package_base)
 
         if not getattr(self, "install_info", None):  # @TODO: make it nicer?
@@ -1036,7 +1071,8 @@ class InstallPackagesCLI:  # noqa: PLR0904
             self.main_sequence()
             raise self.ExitMainSequence
 
-    def build_packages(self) -> None:  # pylint: disable=too-many-branches
+    def build_packages(self) -> None:  # pylint: disable=too-many-branches,too-many-statements
+        logger.debug("<< BUILD PACKAGES")
         if self.args.needed or self.args.devel:
             self._get_installed_status()
 
@@ -1045,7 +1081,8 @@ class InstallPackagesCLI:  # noqa: PLR0904
         packages_to_be_built = self.all_aur_packages_names[:]
         index = 0
         while packages_to_be_built:
-            logger.debug("Gonna build PKGBUILDS: {}", self.package_builds_by_name)
+            logger.debug("  Packages to be built: {}", packages_to_be_built)
+            logger.debug("  Gonna build PKGBUILDS: {}", self.package_builds_by_name)
             if index >= len(packages_to_be_built):
                 index = 0
 
@@ -1057,18 +1094,20 @@ class InstallPackagesCLI:  # noqa: PLR0904
             ) or (
                     self.args.needed and pkg_build.version_already_installed
             ):
-                logger.debug("Already built: {}", pkg_base)
+                logger.debug("  Already built: {}", pkg_base)
+                pkg_build.set_built_package_path()
                 packages_to_be_built.remove(pkg_name)
                 continue
 
             try:
-                logger.debug("Gonna build pkgnames: {}", pkg_build.package_names)
+                logger.debug("  Gonna build pkgnames: {}", pkg_build.package_names)
                 pkg_build.build(
                     all_package_builds=self.package_builds_by_name,
                     resolved_conflicts=self.resolved_conflicts,
                     skip_checkfunc_for_pkgnames=self.skip_checkfunc_for_pkgnames,
                 )
-            except PkgbuildChanged:
+            except PkgbuildChanged as exc:
+                logger.debug("  PKGBUILD changed: {}", exc)
                 self.handle_pkgbuild_changed(pkg_build)
             except (BuildError, DependencyError) as exc:
                 print_stderr(exc)
@@ -1088,7 +1127,8 @@ class InstallPackagesCLI:  # noqa: PLR0904
                     for remaining_aur_pkg_name in packages_to_be_built[:]:
                         if remaining_aur_pkg_name not in self.all_aur_packages_names:
                             packages_to_be_built.remove(remaining_aur_pkg_name)
-            except DependencyNotBuiltYetError:
+            except DependencyNotBuiltYetError as exc:
+                logger.debug("  {} Dep not built yet: {}", index, exc)
                 index += 1
                 for _pkg_name in pkg_build.package_names:
                     deps_fails_counter.setdefault(_pkg_name, 0)
@@ -1102,7 +1142,7 @@ class InstallPackagesCLI:  # noqa: PLR0904
                         self.prompt_dependency_cycle(_pkg_name)
             else:
                 logger.debug(
-                    "Build done for packages {}, removing from queue {}",
+                    "  Build done for packages {}, removing from queue {}",
                     pkg_build.package_names,
                     packages_to_be_built,
                 )
@@ -1113,8 +1153,10 @@ class InstallPackagesCLI:  # noqa: PLR0904
                             and (_pkg_name in packages_to_be_built)
                     ):
                         packages_to_be_built.remove(_pkg_name)
+            logger.debug("")
 
         self.failed_to_build_package_names = failed_to_build_package_names
+        logger.debug(">> BUILD PACKAGES")
 
     def _save_transaction(
             self,

@@ -6,16 +6,16 @@ from typing import TYPE_CHECKING
 
 from .args import parse_args
 from .aur import (
-    AURPackageInfo,
     AurRPCErrors,
     aur_rpc_search,
     get_all_aur_names,
     get_all_aur_packages,
 )
+from .aur_types import AURPackageInfo
 from .exceptions import AURError, SysExit
 from .i18n import translate
 from .pacman import PackageDB, get_pkg_id, refresh_pkg_db_if_needed
-from .pprint import print_error, print_stderr
+from .pikaprint import print_error, print_stderr
 from .print_department import print_package_search_results
 
 if TYPE_CHECKING:

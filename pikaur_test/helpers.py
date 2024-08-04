@@ -19,7 +19,7 @@ from pikaur.core import spawn as core_spawn
 from pikaur.main import main
 from pikaur.makepkg_config import MakePkgCommand
 from pikaur.pacman import PackageDB
-from pikaur.pprint import color_line, get_term_width
+from pikaur.pikaprint import color_line, get_term_width
 from pikaur.srcinfo import SrcInfo
 
 if TYPE_CHECKING:
@@ -38,7 +38,7 @@ if WRITE_DB:
 
     from pikaur.config import ConfigPath, PikaurConfig
 
-    CONFIG_PATH = ConfigPath()()
+    CONFIG_PATH = ConfigPath()
     if CONFIG_PATH.exists():
         shutil.copy(CONFIG_PATH, f"{CONFIG_PATH}.pikaur_test_bak")
         CONFIG_PATH.unlink()

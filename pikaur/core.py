@@ -15,7 +15,7 @@ import pyalpm
 
 from .args import parse_args
 from .i18n import translate
-from .pprint import ColorsHighlight, bold_line, color_line, print_error, print_stderr
+from .pikaprint import ColorsHighlight, bold_line, color_line, print_error, print_stderr
 from .privilege import sudo
 
 if TYPE_CHECKING:
@@ -25,7 +25,7 @@ if TYPE_CHECKING:
 
     from typing_extensions import TypedDict
 
-    from .aur import AURPackageInfo
+    from .aur_types import AURPackageInfo
 
     IOStream = IO[bytes] | int | None
 
@@ -303,13 +303,19 @@ def open_file(
 ) -> codecs.StreamReaderWriter:
     if encoding is None and (mode and READ_MODE in mode):
         encoding = detect_bom_type(file_path)
-    if encoding:
+    try:
+        if encoding:
+            return codecs.open(
+                str(file_path), mode, errors="ignore", encoding=encoding,
+            )
         return codecs.open(
-            str(file_path), mode, errors="ignore", encoding=encoding,
+            str(file_path), mode, errors="ignore",
         )
-    return codecs.open(
-        str(file_path), mode, errors="ignore",
-    )
+    except PermissionError:
+        print_error()
+        print_error(translate("Error opening file: {file_path}").format(file_path=file_path))
+        print_error()
+        raise
 
 
 def replace_file(src: str | Path, dest: str | Path) -> None:
@@ -350,7 +356,16 @@ def chown_to_current(path: Path) -> None:
     if user_id:
         if not isinstance(user_id, int):
             raise TypeError
-        os.chown(path, user_id, user_id)
+        try:
+            os.chown(path, user_id, user_id)
+        except PermissionError as exc:
+            print_error()
+            print_error(
+                translate("Can't change owner to {user_id}: {exc}").format(
+                    user_id=user_id, exc=exc,
+                ),
+            )
+            print_error()
 
 
 def mkdir(path: Path) -> None:

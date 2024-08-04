@@ -27,11 +27,9 @@ class InstallTest(PikaurDbTestCase):
         self.assertInstalled("flac")
 
     def test_aur_package_with_aur_dep(self):
-        # pikaur -Qi (pikaur -Qdmq) | grep -i -e Name -e 'Required By' -e '^$'
-        # pkg_name = "python-gaphor"
-        # dep_name = "python-generic"
-        pkg_name = "python-guessit"
-        dep_name = "python-rebulk"
+        # python -m pikaur_meta_helpers.find_aur_pkgs_with_aur_deps
+        pkg_name = "python-elmextensions"
+        dep_name = "python-efl"
         self.remove_if_installed(pkg_name, dep_name)
 
         pikaur(f"-S {pkg_name} --mflags=--skippgpcheck")
@@ -178,18 +176,18 @@ class InstallTest(PikaurDbTestCase):
 
         pikaur("-S python-pygobject-stubs --rebuild --keepbuild")
         self.assertGreaterEqual(
-            len(os.listdir(BuildCachePath()())), 1,
+            len(os.listdir(BuildCachePath())), 1,
         )
         self.assertGreaterEqual(
-            len(os.listdir(PackageCachePath()())), 1,
+            len(os.listdir(PackageCachePath())), 1,
         )
 
         pikaur("-Sc --noconfirm")
         self.assertFalse(
-            BuildCachePath()().exists(),
+            BuildCachePath().exists(),
         )
         self.assertGreaterEqual(
-            len(os.listdir(PackageCachePath()())), 1,
+            len(os.listdir(PackageCachePath())), 1,
         )
 
     def test_cache_full_clean(self):
@@ -198,18 +196,18 @@ class InstallTest(PikaurDbTestCase):
 
         pikaur("-S python-pygobject-stubs --rebuild --keepbuild")
         self.assertGreaterEqual(
-            len(os.listdir(BuildCachePath()())), 1,
+            len(os.listdir(BuildCachePath())), 1,
         )
         self.assertGreaterEqual(
-            len(os.listdir(PackageCachePath()())), 1,
+            len(os.listdir(PackageCachePath())), 1,
         )
 
         pikaur("-Scc --noconfirm")
         self.assertFalse(
-            BuildCachePath()().exists(),
+            BuildCachePath().exists(),
         )
         self.assertFalse(
-            PackageCachePath()().exists(),
+            PackageCachePath().exists(),
         )
 
     def test_print_commands_and_needed(self):
